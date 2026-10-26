@@ -1,0 +1,124 @@
+
+class Process:
+    def __init__(self, name, index, n):
+        self.name = name
+        self.index = index
+        self.clock = [0] * n
+
+    def internal_event(self):
+        self.clock[self.index] += 1
+        return self.clock.copy()
+
+    def send_event(self):
+        self.clock[self.index] += 1
+        return self.clock.copy()
+
+    def receive_event(self, incoming_clock):
+        self.clock = [
+            max(a, b)
+            for a, b in zip(self.clock, incoming_clock)
+        ]
+        self.clock[self.index] += 1
+        return self.clock.copy()
+
+
+class VectorClockSimulator:
+    def __init__(self, n):
+        self.processes = [
+            Process(f"P{i+1}", i, n)
+            for i in range(n)
+        ]
+        self.events = []
+
+    def record(self, process, kind, clock, message="-"):
+        event = {
+            "event": f"{process.name}-{len(self.events)+1}",
+            "process": process.name,
+            "kind": kind,
+            "clock": clock.copy(),
+            "message": message
+        }
+        self.events.append(event)
+        print(event)
+
+    @staticmethod
+    def compare(c1, c2):
+        if c1 == c2:
+            return "equal"
+
+        if all(a <= b for a, b in zip(c1, c2)):
+            return "before"
+
+        if all(a >= b for a, b in zip(c1, c2)):
+            return "after"
+
+        return "concurrent"
+
+
+# Create three processes
+sim = VectorClockSimulator(3)
+P1, P2, P3 = sim.processes
+
+# P1 events
+clock = P1.internal_event()
+sim.record(P1, "internal", clock)
+
+m1 = P1.send_event()
+sim.record(P1, "send", m1, "m1")
+
+# P2 receives m1 and sends m2
+clock = P2.receive_event(m1)
+sim.record(P2, "receive", clock, "m1")
+
+m2 = P2.send_event()
+sim.record(P2, "send", m2, "m2")
+
+# Independent event in P1
+clock = P1.internal_event()
+sim.record(P1, "internal", clock)
+
+# Independent event in P3
+clock = P3.internal_event()
+sim.record(P3, "internal", clock)
+
+# Another event in P2
+clock = P2.internal_event()
+sim.record(P2, "internal", clock)
+
+# P3 receives m2 and sends m3
+clock = P3.receive_event(m2)
+sim.record(P3, "receive", clock, "m2")
+
+m3 = P3.send_event()
+sim.record(P3, "send", m3, "m3")
+
+# P1 receives m3
+clock = P1.receive_event(m3)
+sim.record(P1, "receive", clock, "m3")
+
+# Compare events from different processes
+print("\nCausal and Concurrent Relationships:")
+
+for i in range(len(sim.events)):
+    for j in range(i + 1, len(sim.events)):
+        e1 = sim.events[i]
+        e2 = sim.events[j]
+
+        if e1["process"] == e2["process"]:
+            continue
+
+        relation = VectorClockSimulator.compare(
+            e1["clock"], e2["clock"]
+        )
+
+        if relation == "before":
+            result = "Causal"
+        elif relation == "after":
+            result = "Causal (reverse)"
+        else:
+            result = relation.capitalize()
+
+        print(
+            e1["event"], e2["event"],
+            ":", result
+        )
